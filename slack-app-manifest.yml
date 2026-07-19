@@ -1,0 +1,23 @@
+# slack-mcp App Manifest
+# https://api.slack.com/apps → Create New App → From a manifest でこの内容を貼り付けると、
+# 必要な User Token Scopes が一括で設定されます。
+display_information:
+  name: slack-mcp-reader
+  description: Read-only Slack access for the slack-mcp MCP server.
+oauth_config:
+  scopes:
+    user:
+      - channels:read
+      - channels:history
+      - groups:read
+      - groups:history
+      - im:read
+      - im:history
+      - mpim:read
+      - mpim:history
+      - search:read
+      - users:read
+settings:
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false
