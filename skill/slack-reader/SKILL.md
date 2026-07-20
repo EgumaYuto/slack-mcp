@@ -1,14 +1,16 @@
 ---
 name: slack-reader
-description: Read Slack via the slack-mcp server — list channels, read channel/DM history, expand threads, and search the workspace. Use whenever the user asks to look up, summarize, or find something in Slack (messages, DMs, threads, "what did X say in #channel", "search Slack for ...").
+description: Read and post to Slack via the slack-mcp server — list channels, read channel/DM history, expand threads, search the workspace, and post messages, thread replies, or reactions. Use whenever the user asks to look up, summarize, or find something in Slack ("what did X say in #channel", "search Slack for ..."), or to send/reply/react in Slack.
 ---
 
-# Slack Reader
+# Slack
 
-Read-only access to Slack through the `slack-mcp` MCP server. Requires the server
-to be registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
+Access to Slack through the `slack-mcp` MCP server. Requires the server to be
+registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
 
 ## Available tools
+
+### Reading
 
 - `slack_whoami` — verify the token / identify the workspace.
 - `slack_list_channels` — get channel & DM ids. `types` = comma list of
@@ -19,6 +21,13 @@ to be registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
 - `slack_get_thread` — expand a thread (needs channel id + parent `thread_ts`).
 - `slack_search` — workspace full-text search with operators.
 - `slack_list_users` — resolve members.
+
+### Writing
+
+- `slack_post_message` — post to a channel/DM. Pass `thread_ts` to reply in a thread.
+- `slack_add_reaction` — add an emoji reaction (name without colons).
+- `slack_update_message` — replace the body of a message the user authored.
+- `slack_delete_message` — delete a message the user authored. Irreversible.
 
 ## How to work
 
@@ -38,10 +47,17 @@ to be registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
    - `after:2024-01-01` / `before:2024-12-31` / `on:2024-06-01`
    - quote phrases: `"exact phrase"`
    Search returns `permalink` — include it when citing a message.
+5. **Posting:** show the user the exact text and the target channel, and get their
+   confirmation, before calling `slack_post_message` — the message goes out under
+   their own name and cannot be un-sent (only deleted after the fact). To reply in
+   a thread rather than the channel, pass the parent's `ts` as `thread_ts`.
+6. **Editing/deleting:** only the token's own messages can be changed. Deletion is
+   permanent — always confirm the specific message with the user first.
 
 ## Notes
 
-- This is **read-only**. There is no posting/writing tool by design.
+- Writes act **as the user**, not as a bot. Treat every post as something the user
+  is personally saying in their workspace.
 - A user token reads only what that user can already see; private channels the
   user hasn't joined return `channel_not_found`.
 - Timestamps come back as both raw `ts` and ISO `time`. Use `ts`/`thread_ts`
