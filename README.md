@@ -111,6 +111,22 @@ cp -R skill/slack-reader ~/.claude/skills/
 - `not_allowed_token_type`: `search.messages` は bot token では使えません。**user token** を使ってください。
 - `invalid_auth`: トークンが失効／誤り。再取得する。
 - `channel_not_found`: user token でも自分が参加していないチャンネルは読めません。
+- `fetch failed`: Slack の認証エラーではなくネットワーク遮断です。Claude Code のサンドボックスが
+  MCP サーバープロセスの通信をブロックしている場合に起きます。`~/.claude/settings.json` に
+  Slack を許可ドメインとして追加してください:
+
+  ```json
+  {
+    "sandbox": {
+      "network": {
+        "allowedDomains": ["slack.com", "*.slack.com"]
+      }
+    }
+  }
+  ```
+
+  切り分け方: `node -e 'fetch("https://slack.com/api/api.test").then(r=>console.log(r.status))'`
+  がターミナルでは成功するのに MCP 経由だけ `fetch failed` になるなら、この設定が原因です。
 
 ## ライセンス
 
