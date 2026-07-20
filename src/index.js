@@ -549,6 +549,24 @@ server.registerTool(
   }
 );
 
+// --- delete a message ---
+server.registerTool(
+  "slack_delete_message",
+  {
+    title: "Slack: delete a message",
+    description:
+      "Permanently delete a message the token's user authored, given its channel id and ts. This cannot be undone — confirm with the user before calling.",
+    inputSchema: {
+      channel: z.string().describe("Channel/conversation id"),
+      ts: z.string().describe("Target message ts"),
+    },
+  },
+  async ({ channel, ts }) => {
+    const data = await slackPost("chat.delete", { channel, ts });
+    return jsonResult({ ok: true, channel: data.channel, ts: data.ts });
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("[slack-mcp] running on stdio");
