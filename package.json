@@ -11,7 +11,7 @@
     "start": "node src/index.js"
   },
   "engines": {
-    "node": ">=18"
+    "node": ">=20.11"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
