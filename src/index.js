@@ -507,6 +507,29 @@ server.registerTool(
   }
 );
 
+// --- add a reaction ---
+server.registerTool(
+  "slack_add_reaction",
+  {
+    title: "Slack: add a reaction",
+    description:
+      "Add an emoji reaction to a message, given its channel id and ts. Use the emoji name without colons (e.g. 'eyes', '+1').",
+    inputSchema: {
+      channel: z.string().describe("Channel/conversation id"),
+      ts: z.string().describe("Target message ts"),
+      name: z.string().describe("Emoji name without colons, e.g. 'white_check_mark'"),
+    },
+  },
+  async ({ channel, ts, name }) => {
+    await slackPost("reactions.add", {
+      channel,
+      timestamp: ts,
+      name: name.replace(/:/g, ""),
+    });
+    return jsonResult({ ok: true, channel, ts, reaction: name });
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("[slack-mcp] running on stdio");
