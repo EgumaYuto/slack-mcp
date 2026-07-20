@@ -53,6 +53,35 @@ async function slackApi(method, params = {}) {
   return data;
 }
 
+/**
+ * Call a Slack Web API method that mutates state. Uses a form-encoded POST body:
+ * every Slack method accepts that, whereas JSON bodies are only supported by some
+ * (reactions.add among the holdouts).
+ */
+async function slackPost(method, body = {}) {
+  const form = new URLSearchParams();
+  for (const [k, v] of Object.entries(body)) {
+    if (v !== undefined && v !== null && v !== "") form.set(k, String(v));
+  }
+  const res = await fetch(new URL(method, API_BASE), {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${SLACK_TOKEN}`,
+      // no charset: Slack warns `superfluous_charset` when it is spelled out
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body: form,
+  });
+  if (!res.ok) {
+    throw new Error(`Slack API HTTP ${res.status} for ${method}`);
+  }
+  const data = await res.json();
+  if (!data.ok) {
+    throw new Error(`Slack API error for ${method}: ${data.error}`);
+  }
+  return data;
+}
+
 // --- user name resolution (cached for the process lifetime) ---
 const userCache = new Map(); // id -> { name, real_name }
 
@@ -427,6 +456,53 @@ server.registerTool(
           is_bot: u.is_bot,
         })),
       next_cursor: data.response_metadata?.next_cursor || null,
+    });
+  }
+);
+
+// --- post a message ---
+server.registerTool(
+  "slack_post_message",
+  {
+    title: "Slack: post a message",
+    description:
+      "Post a message to a channel or DM as the token's user. Pass thread_ts (a parent message's ts) to reply in a thread instead of the channel. Returns the new message's ts and permalink.",
+    inputSchema: {
+      channel: z.string().describe("Channel/conversation id (e.g. C0123 or D0123)"),
+      text: z.string().describe("Message body. Supports Slack mrkdwn."),
+      thread_ts: z
+        .string()
+        .optional()
+        .describe("Parent message ts — set this to reply inside that thread"),
+      reply_broadcast: z
+        .boolean()
+        .optional()
+        .describe("With thread_ts, also surface the reply in the channel. Default false"),
+    },
+  },
+  async ({ channel, text, thread_ts, reply_broadcast }) => {
+    const data = await slackPost("chat.postMessage", {
+      channel,
+      text,
+      thread_ts,
+      reply_broadcast: reply_broadcast || undefined,
+    });
+    let permalink = null;
+    try {
+      const link = await slackApi("chat.getPermalink", {
+        channel: data.channel,
+        message_ts: data.ts,
+      });
+      permalink = link.permalink;
+    } catch {
+      // permalink is a convenience — the post already succeeded
+    }
+    return jsonResult({
+      ok: true,
+      channel: data.channel,
+      ts: data.ts,
+      thread_ts: thread_ts || undefined,
+      permalink,
     });
   }
 );
