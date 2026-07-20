@@ -5,6 +5,21 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { z } from "zod";
+import { existsSync } from "node:fs";
+import { join } from "node:path";
+
+// Load a .env file from the project root as a fallback so the token can live in
+// a file instead of the launch command. Explicitly-set env vars always win.
+if (!process.env.SLACK_TOKEN && !process.env.SLACK_USER_TOKEN) {
+  const envPath = join(import.meta.dirname, "..", ".env");
+  if (existsSync(envPath)) {
+    try {
+      process.loadEnvFile(envPath);
+    } catch {
+      // ignore malformed/unreadable .env
+    }
+  }
+}
 
 const SLACK_TOKEN = process.env.SLACK_TOKEN || process.env.SLACK_USER_TOKEN;
 const API_BASE = "https://slack.com/api/";

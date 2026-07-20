@@ -51,15 +51,32 @@ npm install
 
 ```bash
 SLACK_TOKEN=xoxp-... npm start
-# 別の方法: cp .env.example .env で .env に書いてから起動しても良い
 ```
+
+または、リポジトリ直下に `.env` を置く方法（トークンを起動コマンドに書かずに済む・おすすめ）:
+
+```bash
+cp .env.example .env      # .env を作成
+# .env を開いて SLACK_TOKEN=xoxp-... を実際のトークンに書き換える
+npm start                 # サーバーが .env を自動で読み込む
+```
+
+`.env` は `.gitignore` 済みなのでコミットされません。`.env` の場所はこのリポジトリの**直下**（`src/` の隣、`.env.example` と同じ場所）です。
 
 `[slack-mcp] running on stdio` と出れば起動 OK です（stdin を待ち続けるので Ctrl+C で終了）。
 
 ## Claude Code への登録
 
+`.env` を使う場合はトークンを渡さずに登録できます:
+
 ```bash
-claude mcp add slack --env SLACK_TOKEN=xoxp-... -- node /ABSOLUTE/PATH/TO/slack-mcp/src/index.js
+claude mcp add slack --scope user -- node /ABSOLUTE/PATH/TO/slack-mcp/src/index.js
+```
+
+`.env` を使わず直接渡す場合:
+
+```bash
+claude mcp add slack --scope user --env SLACK_TOKEN=xoxp-... -- node /ABSOLUTE/PATH/TO/slack-mcp/src/index.js
 ```
 
 `claude mcp list` で `slack` が出れば登録完了です。Claude Code の中で「#general の最近のメッセージを読んで」のように依頼できます。
