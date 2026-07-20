@@ -1,7 +1,7 @@
 {
   "name": "slack-mcp",
   "version": "0.1.0",
-  "description": "MCP server for reading Slack — channels, DMs, threads, and search — via a user token.",
+  "description": "MCP server for Slack — read channels, DMs, threads, and search, and post messages — via a user token.",
   "type": "module",
   "bin": {
     "slack-mcp": "src/index.js"

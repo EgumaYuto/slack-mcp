@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-// slack-mcp — an MCP server that reads Slack (channels, DMs, threads, search)
-// using a Slack user token (xoxp-...). Communicates over stdio.
+// slack-mcp — an MCP server that reads and writes Slack (channels, DMs, threads,
+// search) using a Slack user token (xoxp-...). Communicates over stdio.
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
