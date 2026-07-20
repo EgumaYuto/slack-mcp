@@ -83,13 +83,52 @@ function tsToIso(ts) {
   return new Date(seconds * 1000).toISOString();
 }
 
+/**
+ * Walk a Block Kit tree collecting human-readable strings. Bots (GitHub,
+ * CircleCI, ...) put their content in blocks/attachments and leave `text` empty.
+ */
+function collectBlockText(node, out) {
+  if (!node || typeof node !== "object") return;
+  if (Array.isArray(node)) {
+    for (const n of node) collectBlockText(n, out);
+    return;
+  }
+  if (typeof node.text === "string") {
+    if (node.text.trim()) out.push(node.text.trim());
+  } else if (node.text) {
+    collectBlockText(node.text, out);
+  }
+  if (node.type === "link" && node.url && !node.text) out.push(node.url);
+  for (const key of ["elements", "fields", "blocks"]) {
+    if (node[key]) collectBlockText(node[key], out);
+  }
+}
+
+/** Best-effort message body: plain text, else blocks, else attachments. */
+function extractText(m) {
+  if (m.text && m.text.trim()) return m.text;
+
+  const parts = [];
+  if (m.blocks) collectBlockText(m.blocks, parts);
+
+  for (const a of m.attachments || []) {
+    const seg = [a.pretext, a.title, a.text].filter((s) => s && s.trim());
+    // fallback is a flattened duplicate — only useful when nothing else exists
+    if (seg.length) parts.push(seg.join(" — "));
+    else if (a.fallback?.trim()) parts.push(a.fallback.trim());
+  }
+
+  // drop consecutive duplicates (blocks and attachments often mirror each other)
+  return parts.filter((s, i) => s !== parts[i - 1]).join("\n").trim();
+}
+
 /** Normalize a Slack message into a compact shape for the model. */
 function shapeMessage(m) {
   const out = {
     ts: m.ts,
     time: tsToIso(m.ts),
     user: userLabel(m.user) || m.username || m.bot_id || "unknown",
-    text: m.text || "",
+    text: extractText(m),
   };
   if (m.thread_ts && m.thread_ts !== m.ts) out.in_thread = m.thread_ts;
   if (m.reply_count) out.reply_count = m.reply_count;
@@ -226,6 +265,104 @@ server.registerTool(
   }
 );
 
+// --- activity in a time window (thread-aware) ---
+server.registerTool(
+  "slack_get_activity",
+  {
+    title: "Slack: get activity in a time window",
+    description:
+      "Everything that happened in a channel since `oldest`, INCLUDING replies to threads that were started before the window. Use this instead of slack_get_history when summarizing a period (e.g. 'what happened this week'), since history alone returns only top-level messages and misses ongoing thread discussions.",
+    inputSchema: {
+      channel: z.string().describe("Channel/conversation id"),
+      oldest: z.string().describe("Unix ts marking the start of the window"),
+      latest: z.string().optional().describe("Unix ts marking the end of the window"),
+      lookback_days: z
+        .number()
+        .int()
+        .min(1)
+        .max(365)
+        .optional()
+        .describe("How far before the window to scan for thread parents. Default 90"),
+      max_threads: z
+        .number()
+        .int()
+        .min(1)
+        .max(50)
+        .optional()
+        .describe("Cap on threads expanded. Default 20"),
+    },
+  },
+  async ({ channel, oldest, latest, lookback_days, max_threads }) => {
+    const from = Number(oldest);
+    const to = latest ? Number(latest) : Infinity;
+    const scanFloor = from - (lookback_days ?? 90) * 86400;
+    const threadCap = max_threads ?? 20;
+
+    // Page back far enough to see thread parents that predate the window.
+    const scanned = [];
+    let cursor;
+    let truncated = false;
+    for (let page = 0; page < 10; page++) {
+      const data = await slackApi("conversations.history", {
+        channel,
+        limit: 200,
+        latest,
+        cursor,
+      });
+      scanned.push(...data.messages);
+      const oldestSeen = data.messages.at(-1);
+      cursor = data.response_metadata?.next_cursor;
+      if (!cursor || !oldestSeen || Number(oldestSeen.ts) < scanFloor) break;
+      if (page === 9) truncated = true;
+    }
+
+    const inWindow = (ts) => Number(ts) >= from && Number(ts) <= to;
+
+    const topLevel = scanned.filter((m) => inWindow(m.ts));
+
+    // Candidate threads: any activity at or after the window start, and started
+    // before the window ends. Deliberately NOT `latest_reply in window` — a thread
+    // can have replies inside the window while its newest reply falls after it.
+    // Replies are filtered to the window below, so over-selecting here is safe.
+    const activeThreads = scanned
+      .filter(
+        (m) =>
+          m.reply_count &&
+          m.latest_reply &&
+          Number(m.latest_reply) >= from &&
+          Number(m.ts) <= to
+      )
+      .slice(0, threadCap);
+
+    const threadUpdates = [];
+    for (const parent of activeThreads) {
+      const data = await slackApi("conversations.replies", {
+        channel,
+        ts: parent.ts,
+        limit: 200,
+      });
+      const replies = data.messages.filter((m) => m.ts !== parent.ts && inWindow(m.ts));
+      if (!replies.length) continue;
+      await resolveUsers([parent.user, ...replies.map((m) => m.user)]);
+      threadUpdates.push({
+        parent: shapeMessage(parent),
+        parent_started_before_window: Number(parent.ts) < from,
+        new_replies: replies.map(shapeMessage),
+      });
+    }
+
+    await resolveUsers(topLevel.map((m) => m.user));
+
+    return jsonResult({
+      channel,
+      window: { from: tsToIso(oldest), to: latest ? tsToIso(latest) : "now" },
+      messages: topLevel.map(shapeMessage),
+      thread_updates: threadUpdates,
+      scan_truncated: truncated || undefined,
+    });
+  }
+);
+
 // --- search ---
 server.registerTool(
   "slack_search",
@@ -259,7 +396,7 @@ server.registerTool(
         channel: m.channel?.name ? `#${m.channel.name}` : m.channel?.id,
         channel_id: m.channel?.id,
         user: userLabel(m.user) || m.username || "unknown",
-        text: m.text || "",
+        text: extractText(m),
         permalink: m.permalink,
       })),
     });

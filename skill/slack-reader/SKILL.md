@@ -14,6 +14,8 @@ to be registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
 - `slack_list_channels` — get channel & DM ids. `types` = comma list of
   `public_channel,private_channel,im,mpim`.
 - `slack_get_history` — read recent messages of a channel/DM by id.
+- `slack_get_activity` — everything in a time window, including replies to threads
+  started before it. Use this for "what happened this week" style summaries.
 - `slack_get_thread` — expand a thread (needs channel id + parent `thread_ts`).
 - `slack_search` — workspace full-text search with operators.
 - `slack_list_users` — resolve members.
@@ -25,7 +27,9 @@ to be registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
    `slack_list_channels` (or `slack_search` with `in:#name`) to get the id.
 2. **Read history** with `slack_get_history`. Default limit is small (30) —
    raise `limit` or paginate via the returned `next_cursor` when the user wants
-   more history.
+   more history. For a *time range* ("this week", "since Monday") use
+   `slack_get_activity` instead: `slack_get_history` returns only top-level
+   messages, so ongoing thread discussions are silently missed.
 3. **Threads:** messages with `reply_count` are thread parents. To read the full
    discussion, call `slack_get_thread` with that message's `ts` as `thread_ts`.
 4. **Search** with `slack_search`. Prefer Slack operators to narrow results:
@@ -42,5 +46,9 @@ to be registered (tools named `slack_*`) with a Slack **user token** (xoxp-).
   user hasn't joined return `channel_not_found`.
 - Timestamps come back as both raw `ts` and ISO `time`. Use `ts`/`thread_ts`
   for follow-up API calls, ISO for showing the user.
+- Bot posts (GitHub, CircleCI, ...) carry their content in `blocks`/`attachments`
+  rather than `text`; the server extracts it, so these can be verbose.
+- Free Slack plans expose only ~90 days of history. Older messages return nothing
+  from history/activity even though the channel clearly has them.
 - If tools are missing, the server isn't registered — point the user to the
   slack-mcp README setup steps.
