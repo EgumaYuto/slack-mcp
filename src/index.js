@@ -530,6 +530,25 @@ server.registerTool(
   }
 );
 
+// --- edit a message ---
+server.registerTool(
+  "slack_update_message",
+  {
+    title: "Slack: edit a message",
+    description:
+      "Replace the text of an existing message the token's user authored, given its channel id and ts. The new text fully replaces the old body.",
+    inputSchema: {
+      channel: z.string().describe("Channel/conversation id"),
+      ts: z.string().describe("Target message ts"),
+      text: z.string().describe("New message body — replaces the existing text entirely"),
+    },
+  },
+  async ({ channel, ts, text }) => {
+    const data = await slackPost("chat.update", { channel, ts, text });
+    return jsonResult({ ok: true, channel: data.channel, ts: data.ts });
+  }
+);
+
 const transport = new StdioServerTransport();
 await server.connect(transport);
 console.error("[slack-mcp] running on stdio");
